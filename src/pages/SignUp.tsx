@@ -4,6 +4,7 @@ import Logo from "@/components/Logo";
 import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
 import { useRegister } from "@/hooks/api/useAuth";
 import { toast } from "sonner";
+import { AxiosError } from "axios";
 
 const SignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +26,7 @@ const SignUp = () => {
         password: formData.password,
       },
       {
-        onError: (error: any) => {
+        onError: (error: AxiosError<{ error?: string }>) => {
           toast.error(error.response?.data?.error || "Registration failed");
         },
       }
