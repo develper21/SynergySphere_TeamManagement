@@ -3,6 +3,7 @@ import { Plus, Search, Users, CheckSquare, MoreVertical, Calendar, Loader2 } fro
 import { useProjects, useCreateProject } from "@/hooks/api/useProjects";
 import { EmptyProjects } from "@/components/empty-states";
 import { toast } from "sonner";
+import { AxiosError } from "axios";
 
 const priorityColors = {
   low: "bg-accent/20 text-accent",
@@ -126,7 +127,7 @@ const Projects = () => {
                     setShowCreateModal(false);
                     setNewProject({ name: "", description: "", priority: "medium" });
                   },
-                  onError: (error: any) => {
+                  onError: (error: AxiosError<{ error?: string }>) => {
                     toast.error(error.response?.data?.error || "Failed to create project");
                   },
                 });
