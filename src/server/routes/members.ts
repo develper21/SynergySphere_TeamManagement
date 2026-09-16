@@ -2,82 +2,47 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { projectMembers, users, projects, notifications } from "../db/schema";
-import { eq, and, count } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types";
 
 const router = Router();
 
 // Validation schemas
-const inviteSchema = z.object({
+const inviteMemberSchema = z.object({
   projectId: z.string().uuid(),
   email: z.string().email(),
-  role: z.enum(["manager", "member"]).default("member"),
+  role: z.enum(["admin", "manager", "member"]).default("member"),
 });
 
 const updateRoleSchema = z.object({
-  role: z.enum(["manager", "member"]),
+  role: z.enum(["admin", "manager", "member"]),
 });
 
-// Get all members across user's projects
+// Get all members (optionally filtered by project)
 router.get("/", authenticateToken, async (req: AuthenticatedRequest, res, next) => {
   try {
     const projectId = req.query.projectId as string | undefined;
 
-    let query = db
-      .select({
-        member: projectMembers,
-        user: {
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          avatarUrl: users.avatarUrl,
-        },
-        project: {
-          id: projects.id,
-          name: projects.name,
-        },
-      })
-      .from(projectMembers)
-      .innerJoin(users, eq(projectMembers.userId, users.id))
-      .innerJoin(projects, eq(projectMembers.projectId, projects.id))
-      .innerJoin(
-        projectMembers as typeof projectMembers,
-        and(
-          eq(projectMembers.projectId, projects.id),
-          eq(projectMembers.userId, req.user!.id)
-        )
-      );
-
+    let members;
     if (projectId) {
-      query = query.where(eq(projectMembers.projectId, projectId)) as typeof query;
+      members = await db.query.projectMembers.findMany({
+        where: eq(projectMembers.projectId, projectId),
+        with: {
+          user: true,
+        },
+      });
+    } else {
+      members = await db.query.projectMembers.findMany({
+        with: {
+          user: true,
+        },
+      });
     }
-
-    const members = await query;
-
-    // Get task counts for each member
-    const membersWithStats = await Promise.all(
-      members.map(async (m) => {
-        const taskCount = await db.$count(
-          db.select().from(db.query.tasks as any),
-          and(
-            eq((db.query.tasks as any).projectId, m.project.id),
-            eq((db.query.tasks as any).assigneeId, m.user.id)
-          )
-        );
-
-        return {
-          ...m.member,
-          user: m.user,
-          project: m.project,
-          tasks: taskCount,
-        };
-      })
-    );
 
     res.json({
       success: true,
-      data: membersWithStats,
+      data: members,
     });
   } catch (error) {
     next(error);
@@ -87,70 +52,48 @@ router.get("/", authenticateToken, async (req: AuthenticatedRequest, res, next) 
 // Invite member
 router.post("/invite", authenticateToken, async (req: AuthenticatedRequest, res, next) => {
   try {
-    const { projectId, email, role } = inviteSchema.parse(req.body);
+    const { projectId, email, role } = inviteMemberSchema.parse(req.body);
 
-    // Check if user is manager of project
-    const membership = await db.query.projectMembers.findFirst({
-      where: and(
-        eq(projectMembers.projectId, projectId),
-        eq(projectMembers.userId, req.user!.id)
-      ),
-    });
-
-    if (!membership || membership.role !== "manager") {
-      return res.status(403).json({
-        success: false,
-        error: "Only managers can invite members",
-      });
-    }
-
-    // Find user by email
-    const userToInvite = await db.query.users.findFirst({
+    const user = await db.query.users.findFirst({
       where: eq(users.email, email),
     });
 
-    if (!userToInvite) {
+    if (!user) {
       return res.status(404).json({
         success: false,
-        error: "User not found with this email",
+        error: "User not found",
       });
     }
 
-    // Check if already member
     const existingMember = await db.query.projectMembers.findFirst({
       where: and(
         eq(projectMembers.projectId, projectId),
-        eq(projectMembers.userId, userToInvite.id)
+        eq(projectMembers.userId, user.id)
       ),
     });
 
     if (existingMember) {
       return res.status(400).json({
         success: false,
-        error: "User is already a member of this project",
+        error: "User is already a member",
       });
     }
 
-    // Add member
     const [newMember] = await db
       .insert(projectMembers)
       .values({
         projectId,
-        userId: userToInvite.id,
+        userId: user.id,
         role,
       })
       .returning();
 
-    // Create notification for invited user
-    const project = await db.query.projects.findFirst({
-      where: eq(projects.id, projectId),
-    });
-
+    // Create notification
     await db.insert(notifications).values({
-      userId: userToInvite.id,
+      userId: user.id,
       type: "invite",
       title: "Project Invitation",
-      description: `${req.user!.name} invited you to join "${project?.name}"`,
+      description: `You have been invited to join a project`,
       actionable: true,
       relatedId: projectId,
     });
@@ -178,21 +121,6 @@ router.put("/:id/role", authenticateToken, async (req: AuthenticatedRequest, res
       return res.status(404).json({
         success: false,
         error: "Member not found",
-      });
-    }
-
-    // Check if user is manager of project
-    const membership = await db.query.projectMembers.findFirst({
-      where: and(
-        eq(projectMembers.projectId, member.projectId),
-        eq(projectMembers.userId, req.user!.id)
-      ),
-    });
-
-    if (!membership || membership.role !== "manager") {
-      return res.status(403).json({
-        success: false,
-        error: "Only managers can update roles",
       });
     }
 
@@ -224,21 +152,6 @@ router.delete("/:id", authenticateToken, async (req: AuthenticatedRequest, res, 
       return res.status(404).json({
         success: false,
         error: "Member not found",
-      });
-    }
-
-    // Check if user is manager of project or removing themselves
-    const membership = await db.query.projectMembers.findFirst({
-      where: and(
-        eq(projectMembers.projectId, member.projectId),
-        eq(projectMembers.userId, req.user!.id)
-      ),
-    });
-
-    if (!membership || (membership.role !== "manager" && member.userId !== req.user!.id)) {
-      return res.status(403).json({
-        success: false,
-        error: "Access denied",
       });
     }
 
