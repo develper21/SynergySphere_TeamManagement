@@ -1,5 +1,5 @@
-import { db } from "./index";
-import { users, projects, projectMembers, tasks, discussions, notifications, activities } from "./schema";
+import { db } from "./index.js";
+import { users, projects, projectMembers, tasks, discussions, notifications, activities } from "./schema.js";
 import { eq } from "drizzle-orm";
 
 async function seed() {
