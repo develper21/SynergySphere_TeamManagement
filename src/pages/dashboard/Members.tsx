@@ -4,6 +4,7 @@ import { useMembers, useInviteMember } from "@/hooks/api/useMembers";
 import { useProjects } from "@/hooks/api/useProjects";
 import { EmptyMembers } from "@/components/empty-states";
 import { toast } from "sonner";
+import { AxiosError } from "axios";
 
 const Members = () => {
   const [search, setSearch] = useState("");
@@ -96,7 +97,7 @@ const Members = () => {
                     setShowInvite(false);
                     setInviteData({ email: "", role: "member", projectId: "" });
                   },
-                  onError: (error: any) => {
+                  onError: (error: AxiosError<{ error?: string }>) => {
                     toast.error(error.response?.data?.error || "Failed to send invitation");
                   },
                 });
