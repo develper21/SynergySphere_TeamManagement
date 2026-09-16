@@ -13,16 +13,16 @@ if (!process.env.DATABASE_URL) {
 }
 
 // Import routes
-import authRoutes from "./routes/auth";
-import projectRoutes from "./routes/projects";
-import taskRoutes from "./routes/tasks";
-import memberRoutes from "./routes/members";
-import discussionRoutes from "./routes/discussions";
-import notificationRoutes from "./routes/notifications";
-import dashboardRoutes from "./routes/dashboard";
+import authRoutes from "./routes/auth.js";
+import projectRoutes from "./routes/projects.js";
+import taskRoutes from "./routes/tasks.js";
+import memberRoutes from "./routes/members.js";
+import discussionRoutes from "./routes/discussions.js";
+import notificationRoutes from "./routes/notifications.js";
+import dashboardRoutes from "./routes/dashboard.js";
 
 // Import middleware
-import { errorHandler, notFoundHandler } from "./middleware/error";
+import { errorHandler, notFoundHandler } from "./middleware/error.js";
 
 const app = express();
 
@@ -82,6 +82,17 @@ apiRouter.use("/dashboard", dashboardRoutes);
 // Mount under both /api and root to guarantee compatibility with rewrites
 app.use("/api", apiRouter);
 app.use(apiRouter);
+
+// Serve static files in production
+if (process.env.NODE_ENV === "production") {
+  const distPath = path.resolve(process.cwd(), "dist");
+  app.use(express.static(distPath));
+
+  // SPA fallback - serve index.html for all non-API routes
+  app.get("*", (_req, res) => {
+    res.sendFile(path.resolve(distPath, "index.html"));
+  });
+}
 
 // Error handling
 app.use(notFoundHandler);
