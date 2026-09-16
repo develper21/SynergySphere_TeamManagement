@@ -1,78 +1,101 @@
 import { Router } from "express";
 import { db } from "../db";
 import { projects, tasks, projectMembers, activities, users } from "../db/schema";
-import { eq, and, count, sql } from "drizzle-orm";
+import { eq, and, desc, count, inArray } from "drizzle-orm";
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types";
 
 const router = Router();
 
-// Get dashboard statistics
+// Get dashboard stats
 router.get("/stats", authenticateToken, async (req: AuthenticatedRequest, res, next) => {
   try {
     const userId = req.user!.id;
-
-    // Get user's projects
-    const userProjectIds = await db
-      .select({ projectId: projectMembers.projectId })
-      .from(projectMembers)
-      .where(eq(projectMembers.userId, userId));
-
-    const projectIds = userProjectIds.map((p) => p.projectId);
-
-    if (projectIds.length === 0) {
-      return res.json({
-        success: true,
-        data: {
-          activeProjects: 0,
-          tasksCompleted: 0,
-          teamMembers: 0,
-          productivity: 0,
-        },
-      });
-    }
+    const isAdmin = req.user!.role === "admin";
 
     // Active projects count
-    const activeProjectsResult = await db
-      .select({ count: count() })
-      .from(projects)
-      .where(
-        and(
-          eq(projects.status, "active"),
-          sql`${projects.id} IN (${sql.join(projectIds, sql`, `)})`
+    let activeProjects = 0;
+    if (isAdmin) {
+      const activeRes = await db
+        .select({ count: count() })
+        .from(projects)
+        .where(eq(projects.status, "active"));
+      activeProjects = activeRes[0]?.count || 0;
+    } else {
+      const activeRes = await db
+        .select({ count: count() })
+        .from(projects)
+        .innerJoin(
+          projectMembers,
+          and(
+            eq(projects.id, projectMembers.projectId),
+            eq(projectMembers.userId, userId)
+          )
         )
-      );
+        .where(eq(projects.status, "active"));
+      activeProjects = activeRes[0]?.count || 0;
+    }
 
-    const activeProjects = activeProjectsResult[0]?.count || 0;
+    // Tasks completed count
+    let tasksCompleted = 0;
+    let totalTasks = 0;
+    if (isAdmin) {
+      const completedRes = await db
+        .select({ count: count() })
+        .from(tasks)
+        .where(eq(tasks.status, "done"));
+      tasksCompleted = completedRes[0]?.count || 0;
 
-    // Tasks completed
-    const completedTasksResult = await db
-      .select({ count: count() })
-      .from(tasks)
-      .where(
-        and(
-          eq(tasks.status, "done"),
-          sql`${tasks.projectId} IN (${sql.join(projectIds, sql`, `)})`
+      const totalRes = await db.select({ count: count() }).from(tasks);
+      totalTasks = totalRes[0]?.count || 0;
+    } else {
+      const completedRes = await db
+        .select({ count: count() })
+        .from(tasks)
+        .innerJoin(
+          projectMembers,
+          and(
+            eq(tasks.projectId, projectMembers.projectId),
+            eq(projectMembers.userId, userId)
+          )
         )
-      );
+        .where(eq(tasks.status, "done"));
+      tasksCompleted = completedRes[0]?.count || 0;
 
-    const tasksCompleted = completedTasksResult[0]?.count || 0;
+      const totalRes = await db
+        .select({ count: count() })
+        .from(tasks)
+        .innerJoin(
+          projectMembers,
+          and(
+            eq(tasks.projectId, projectMembers.projectId),
+            eq(projectMembers.userId, userId)
+          )
+        );
+      totalTasks = totalRes[0]?.count || 0;
+    }
 
-    // Team members (unique users across all projects)
-    const teamMembersResult = await db
-      .select({ count: count() })
-      .from(projectMembers)
-      .where(sql`${projectMembers.projectId} IN (${sql.join(projectIds, sql`, `)})`);
+    // Team members count
+    let teamMembers = 0;
+    if (isAdmin) {
+      const membersRes = await db.select({ count: count() }).from(users);
+      teamMembers = membersRes[0]?.count || 0;
+    } else {
+      const userProjectRows = await db
+        .select({ projectId: projectMembers.projectId })
+        .from(projectMembers)
+        .where(eq(projectMembers.userId, userId));
+      const userPids = userProjectRows.map((r) => r.projectId);
 
-    const teamMembers = teamMembersResult[0]?.count || 0;
+      if (userPids.length > 0) {
+        const membersRes = await db
+          .select({ count: count() })
+          .from(projectMembers)
+          .where(inArray(projectMembers.projectId, userPids));
+        teamMembers = membersRes[0]?.count || 0;
+      }
+    }
 
-    // Calculate productivity (completed tasks / total tasks * 100)
-    const totalTasksResult = await db
-      .select({ count: count() })
-      .from(tasks)
-      .where(sql`${tasks.projectId} IN (${sql.join(projectIds, sql`, `)})`);
-
-    const totalTasks = totalTasksResult[0]?.count || 0;
     const productivity = totalTasks > 0 ? Math.round((tasksCompleted / totalTasks) * 100) : 0;
 
     res.json({
@@ -94,56 +117,44 @@ router.get("/activities", authenticateToken, async (req: AuthenticatedRequest, r
   try {
     const userId = req.user!.id;
 
-    // Get user's projects
-    const userProjectIds = await db
-      .select({ projectId: projectMembers.projectId })
-      .from(projectMembers)
-      .where(eq(projectMembers.userId, userId));
-
-    const projectIds = userProjectIds.map((p) => p.projectId);
-
-    if (projectIds.length === 0) {
-      return res.json({
-        success: true,
-        data: [],
-      });
-    }
-
-    const recentActivities = await db
-      .select({
-        id: activities.id,
-        action: activities.action,
-        entityType: activities.entityType,
-        metadata: activities.metadata,
-        createdAt: activities.createdAt,
-        user: {
-          id: users.id,
-          name: users.name,
-        },
-        project: {
-          id: projects.id,
-          name: projects.name,
-        },
-      })
-      .from(activities)
-      .innerJoin(users, eq(activities.userId, users.id))
-      .innerJoin(projects, eq(activities.projectId, projects.id))
-      .where(sql`${activities.projectId} IN (${sql.join(projectIds, sql`, `)})`)
-      .orderBy(sql`${activities.createdAt} DESC`)
-      .limit(20);
-
-    // Parse metadata and format response
-    const formattedActivities = recentActivities.map((activity) => {
-      const metadata = activity.metadata ? JSON.parse(activity.metadata) : {};
-      return {
-        id: activity.id,
-        user: activity.user.name,
-        project: activity.project.name,
-        action: activity.action,
-        task: metadata.title || "",
-        time: activity.createdAt,
-      };
+    const memberships = await db.query.projectMembers.findMany({
+      where: eq(projectMembers.userId, userId),
     });
+    const projectIds = memberships.map((m) => m.projectId);
+
+    const recentActivities = await db.query.activities.findMany({
+      where: and(
+        eq(activities.userId, userId),
+        projectIds.length > 0 ? eq(activities.projectId, projectIds[0]) : undefined
+      ),
+      orderBy: [desc(activities.createdAt)],
+      limit: 10,
+    });
+
+    const formattedActivities = await Promise.all(
+      recentActivities.map(async (activity) => {
+        const user = await db.query.users.findFirst({
+          where: eq(users.id, activity.userId),
+        });
+        const project = activity.projectId
+          ? await db.query.projects.findFirst({
+              where: eq(projects.id, activity.projectId),
+            })
+          : null;
+
+        const meta = activity.metadata ? JSON.parse(activity.metadata) : {};
+        const task = meta.taskTitle || meta.projectName || meta.title || "";
+
+        return {
+          id: activity.id,
+          user: user?.name || "Unknown User",
+          project: project?.name || "Unknown Project",
+          action: activity.action,
+          task,
+          time: activity.createdAt,
+        };
+      })
+    );
 
     res.json({
       success: true,
