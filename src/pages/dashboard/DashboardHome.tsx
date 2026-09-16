@@ -1,21 +1,12 @@
 import { BarChart3, FolderKanban, CheckSquare, Users, TrendingUp, Clock, ArrowUpRight, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
-import { useDashboardStats, useRecentActivities } from "@/hooks/api/useDashboard";
+import { useDashboardStats, useRecentActivities, useWeeklyActivity } from "@/hooks/api/useDashboard";
 import { formatDistanceToNow } from "date-fns";
-
-const weeklyData = [
-  { day: "Mon", tasks: 8, hours: 6 },
-  { day: "Tue", tasks: 12, hours: 7 },
-  { day: "Wed", tasks: 6, hours: 5 },
-  { day: "Thu", tasks: 15, hours: 8 },
-  { day: "Fri", tasks: 10, hours: 6 },
-  { day: "Sat", tasks: 3, hours: 2 },
-  { day: "Sun", tasks: 1, hours: 1 },
-];
 
 const DashboardHome = () => {
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: activities, isLoading: activitiesLoading } = useRecentActivities();
+  const { data: weeklyData, isLoading: weeklyLoading } = useWeeklyActivity();
 
   const statCards = [
     { icon: FolderKanban, label: "Active Projects", value: stats?.activeProjects?.toString() || "0", change: "+2 this week", color: "text-primary" },
@@ -58,42 +49,54 @@ const DashboardHome = () => {
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="clay-card p-6">
           <h3 className="font-bold mb-4">Weekly Task Activity</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={weeklyData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
-              <Tooltip
-                contentStyle={{
-                  background: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "1rem",
-                  boxShadow: "var(--clay-shadow-sm)",
-                }}
-              />
-              <Bar dataKey="tasks" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {weeklyLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={weeklyData || []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "1rem",
+                    boxShadow: "var(--clay-shadow-sm)",
+                  }}
+                />
+                <Bar dataKey="tasks" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
         <div className="clay-card p-6">
           <h3 className="font-bold mb-4">Working Hours</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={weeklyData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
-              <Tooltip
-                contentStyle={{
-                  background: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "1rem",
-                  boxShadow: "var(--clay-shadow-sm)",
-                }}
-              />
-              <Line type="monotone" dataKey="hours" stroke="hsl(var(--secondary))" strokeWidth={3} dot={{ fill: "hsl(var(--secondary))", r: 5 }} />
-            </LineChart>
-          </ResponsiveContainer>
+          {weeklyLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={weeklyData || []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "1rem",
+                    boxShadow: "var(--clay-shadow-sm)",
+                  }}
+                />
+                <Line type="monotone" dataKey="hours" stroke="hsl(var(--secondary))" strokeWidth={3} dot={{ fill: "hsl(var(--secondary))", r: 5 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 
