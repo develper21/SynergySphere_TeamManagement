@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
 import jwt from "jsonwebtoken";
-import { db } from "../db";
-import { users } from "../db/schema";
+import { db } from "../db/index.js";
+import { users } from "../db/schema.js";
 import { eq } from "drizzle-orm";
-import { authenticateToken } from "../middleware/auth";
-import { AuthenticatedRequest } from "../types";
+import { authenticateToken } from "../middleware/auth.js";
+import { AuthenticatedRequest } from "../types/index.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
 const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || "30d") as jwt.SignOptions["expiresIn"];
