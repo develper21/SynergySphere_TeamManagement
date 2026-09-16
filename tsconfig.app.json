@@ -23,6 +23,7 @@
     },
     "skipLibCheck": true,
     "strict": false,
+    "strictNullChecks": true,
     "target": "ES2020",
     "types": [
       "vitest/globals"
@@ -30,6 +31,7 @@
     "useDefineForClassFields": true
   },
   "include": [
-    "src"
+    "src",
+    "api"
   ]
 }
