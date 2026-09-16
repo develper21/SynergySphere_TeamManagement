@@ -5,6 +5,7 @@ import { useTasks, useUpdateTaskStatus } from "@/hooks/api/useTasks";
 import { useProjects } from "@/hooks/api/useProjects";
 import { EmptyTasks } from "@/components/empty-states";
 import { toast } from "sonner";
+import { AxiosError } from "axios";
 
 type TaskStatus = "todo" | "in-progress" | "done";
 type TaskPriority = "low" | "medium" | "high";
@@ -69,7 +70,7 @@ const Tasks = () => {
                       onClick={() => {
                         const nextStatus = col.key === "todo" ? "in-progress" : col.key === "in-progress" ? "done" : "todo";
                         updateTaskStatus.mutate({ id: task.id, status: nextStatus }, {
-                          onError: (error: any) => {
+                          onError: (error: AxiosError<{ error?: string }>) => {
                             toast.error(error.response?.data?.error || "Failed to update task");
                           },
                         });
