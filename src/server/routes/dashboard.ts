@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { db } from "../db";
-import { projects, tasks, projectMembers, activities, users } from "../db/schema";
-import { eq, and, desc, count, inArray } from "drizzle-orm";
-import { authenticateToken } from "../middleware/auth";
-import { AuthenticatedRequest } from "../types";
+import { db } from "../db/index.js";
+import { projects, tasks, projectMembers, activities, users } from "../db/schema.js";
+import { eq, and, desc, count, inArray, gte } from "drizzle-orm";
+import { authenticateToken } from "../middleware/auth.js";
+import { AuthenticatedRequest } from "../types/index.js";
 
 const router = Router();
 
@@ -106,6 +106,66 @@ router.get("/stats", authenticateToken, async (req: AuthenticatedRequest, res, n
         teamMembers,
         productivity,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get weekly task activity
+router.get("/weekly-activity", authenticateToken, async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const userId = req.user!.id;
+    const isAdmin = req.user!.role === "admin";
+
+    // Get tasks from the last 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    let taskQuery;
+    if (isAdmin) {
+      taskQuery = db
+        .select()
+        .from(tasks)
+        .where(gte(tasks.createdAt, sevenDaysAgo));
+    } else {
+      taskQuery = db
+        .select()
+        .from(tasks)
+        .innerJoin(
+          projectMembers,
+          and(
+            eq(tasks.projectId, projectMembers.projectId),
+            eq(projectMembers.userId, userId)
+          )
+        )
+        .where(gte(tasks.createdAt, sevenDaysAgo));
+    }
+
+    const allTasks = await taskQuery;
+
+    // Group by day of week
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const weeklyData = days.map(day => ({
+      day,
+      tasks: 0,
+      hours: 0,
+    }));
+
+    allTasks.forEach(task => {
+      const taskDate = new Date(task.createdAt);
+      const dayName = days[taskDate.getDay()];
+      const dayData = weeklyData.find(d => d.day === dayName);
+      if (dayData) {
+        dayData.tasks += 1;
+        // Estimate hours based on task count (1 task = ~1 hour average)
+        dayData.hours += 1;
+      }
+    });
+
+    res.json({
+      success: true,
+      data: weeklyData,
     });
   } catch (error) {
     next(error);
