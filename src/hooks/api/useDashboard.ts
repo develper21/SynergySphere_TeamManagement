@@ -22,3 +22,14 @@ export const useRecentActivities = () => {
     },
   });
 };
+
+// Get weekly activity data
+export const useWeeklyActivity = () => {
+  return useQuery({
+    queryKey: ["dashboard", "weekly-activity"],
+    queryFn: async () => {
+      const { data } = await api.get("/dashboard/weekly-activity");
+      return data.data as Array<{ day: string; tasks: number; hours: number }>;
+    },
+  });
+};
