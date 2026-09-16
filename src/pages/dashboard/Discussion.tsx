@@ -7,6 +7,7 @@ import { getStoredUser } from "@/hooks/api/useAuth";
 import { EmptyDiscussions } from "@/components/empty-states";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { AxiosError } from "axios";
 
 const Discussion = () => {
   const { data: projects } = useProjects();
@@ -34,7 +35,7 @@ const Discussion = () => {
       content: input,
     }, {
       onSuccess: () => setInput(""),
-      onError: (error: any) => {
+      onError: (error: AxiosError<{ error?: string }>) => {
         toast.error(error.response?.data?.error || "Failed to send message");
       },
     });
