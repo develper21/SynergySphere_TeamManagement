@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db } from "../db";
-import { discussions, projectMembers, users, projects } from "../db/schema";
+import { db } from "../db/index.js";
+import { discussions, projectMembers, users, projects } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
-import { authenticateToken } from "../middleware/auth";
-import { AuthenticatedRequest } from "../types";
+import { authenticateToken } from "../middleware/auth.js";
+import { AuthenticatedRequest } from "../types/index.js";
 
 const router = Router();
 
