@@ -9,7 +9,9 @@ const DashboardLayout = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <DashboardTopbar />
         <main className="flex-1 overflow-y-auto p-4">
-          <Outlet />
+          <div className="max-w-7xl mx-auto">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
