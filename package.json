@@ -12,6 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "server:dev": "tsx watch src/server/index.ts",
+    "server:start": "NODE_ENV=production tsx src/server/index.ts",
+    "dev:all": "concurrently \"npm run dev\" \"npm run server:dev\"",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/server/db/seed.ts"
   },
@@ -94,6 +96,8 @@
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react-swc": "^3.11.0",
     "autoprefixer": "^10.4.21",
+    "caniuse-lite": "^1.0.30001810",
+    "concurrently": "^10.0.5",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",
