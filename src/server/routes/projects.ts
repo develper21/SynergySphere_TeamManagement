@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db";
-import { projects, projectMembers, tasks, users } from "../db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { projects, projectMembers, tasks } from "../db/schema";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types";
 
@@ -27,34 +27,63 @@ const updateProjectSchema = z.object({
 // Get all projects for current user
 router.get("/", authenticateToken, async (req: AuthenticatedRequest, res, next) => {
   try {
-    const userProjects = await db
-      .select({
-        project: projects,
-        memberCount: db.$count(
-          projectMembers,
-          eq(projectMembers.projectId, projects.id)
-        ),
-        taskCount: db.$count(tasks, eq(tasks.projectId, projects.id)),
-        completedTaskCount: db.$count(
-          tasks,
-          and(eq(tasks.projectId, projects.id), eq(tasks.status, "done"))
-        ),
-      })
-      .from(projects)
-      .innerJoin(
-        projectMembers,
-        eq(projects.id, projectMembers.projectId)
-      )
-      .where(eq(projectMembers.userId, req.user!.id));
+    const userMemberships = await db.query.projectMembers.findMany({
+      where: eq(projectMembers.userId, req.user!.id),
+    });
+    const userProjectIds = userMemberships.map((m) => m.projectId);
 
-    const formattedProjects = userProjects.map((p) => ({
-      ...p.project,
-      members: p.memberCount,
-      tasks: {
-        total: p.taskCount,
-        done: p.completedTaskCount,
-      },
-    }));
+    let userProjects;
+    if (req.user!.role === "admin") {
+      userProjects = await db.query.projects.findMany({
+        with: {
+          members: true,
+        },
+        orderBy: [desc(projects.createdAt)],
+      });
+    } else if (userProjectIds.length > 0) {
+      userProjects = await db.query.projects.findMany({
+        where: inArray(projects.id, userProjectIds),
+        with: {
+          members: true,
+        },
+        orderBy: [desc(projects.createdAt)],
+      });
+    } else {
+      userProjects = await db.query.projects.findMany({
+        where: eq(projects.createdBy, req.user!.id),
+        with: {
+          members: true,
+        },
+        orderBy: [desc(projects.createdAt)],
+      });
+    }
+
+    const formattedProjects = await Promise.all(
+      userProjects.map(async (project) => {
+        const memberCount = project.members?.length || 0;
+        const taskList = await db.query.tasks.findMany({
+          where: eq(tasks.projectId, project.id),
+        });
+        const completedTaskCount = taskList.filter((t) => t.status === "done").length;
+
+        return {
+          id: project.id,
+          name: project.name,
+          description: project.description,
+          priority: project.priority,
+          status: project.status,
+          dueDate: project.dueDate,
+          createdBy: project.createdBy,
+          members: memberCount,
+          tasks: {
+            total: taskList.length,
+            done: completedTaskCount,
+          },
+          createdAt: project.createdAt,
+          updatedAt: project.updatedAt,
+        };
+      })
+    );
 
     res.json({
       success: true,
@@ -65,44 +94,22 @@ router.get("/", authenticateToken, async (req: AuthenticatedRequest, res, next) 
   }
 });
 
-// Create project
-router.post("/", authenticateToken, async (req: AuthenticatedRequest, res, next) => {
-  try {
-    const data = createProjectSchema.parse(req.body);
-
-    const [project] = await db
-      .insert(projects)
-      .values({
-        name: data.name,
-        description: data.description,
-        priority: data.priority,
-        dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        createdBy: req.user!.id,
-      })
-      .returning();
-
-    // Add creator as manager
-    await db.insert(projectMembers).values({
-      projectId: project.id,
-      userId: req.user!.id,
-      role: "manager",
-    });
-
-    res.status(201).json({
-      success: true,
-      data: project,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Get project by ID
+// Get single project
 router.get("/:id", authenticateToken, async (req: AuthenticatedRequest, res, next) => {
   try {
     const projectId = req.params.id as string;
 
-    // Check if user is member
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, projectId),
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: "Project not found",
+      });
+    }
+
     const membership = await db.query.projectMembers.findFirst({
       where: and(
         eq(projectMembers.projectId, projectId),
@@ -117,45 +124,41 @@ router.get("/:id", authenticateToken, async (req: AuthenticatedRequest, res, nex
       });
     }
 
-    const project = await db.query.projects.findFirst({
-      where: eq(projects.id, projectId),
-      with: {
-        members: {
-          with: {
-            user: {
-              columns: {
-                id: true,
-                name: true,
-                email: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
-        tasks: {
-          with: {
-            assignee: {
-              columns: {
-                id: true,
-                name: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!project) {
-      return res.status(404).json({
-        success: false,
-        error: "Project not found",
-      });
-    }
-
     res.json({
       success: true,
       data: project,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Create project
+router.post("/", authenticateToken, async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { name, description, priority, dueDate } = createProjectSchema.parse(req.body);
+
+    const [newProject] = await db
+      .insert(projects)
+      .values({
+        name,
+        description,
+        priority,
+        dueDate: dueDate ? new Date(dueDate) : null,
+        status: "active",
+        createdBy: req.user!.id,
+      })
+      .returning();
+
+    await db.insert(projectMembers).values({
+      projectId: newProject.id,
+      userId: req.user!.id,
+      role: "manager",
+    });
+
+    res.status(201).json({
+      success: true,
+      data: newProject,
     });
   } catch (error) {
     next(error);
@@ -166,9 +169,8 @@ router.get("/:id", authenticateToken, async (req: AuthenticatedRequest, res, nex
 router.put("/:id", authenticateToken, async (req: AuthenticatedRequest, res, next) => {
   try {
     const projectId = req.params.id as string;
-    const data = updateProjectSchema.parse(req.body);
+    const updates = updateProjectSchema.parse(req.body);
 
-    // Check if user is manager
     const membership = await db.query.projectMembers.findFirst({
       where: and(
         eq(projectMembers.projectId, projectId),
@@ -179,23 +181,24 @@ router.put("/:id", authenticateToken, async (req: AuthenticatedRequest, res, nex
     if (!membership || membership.role !== "manager") {
       return res.status(403).json({
         success: false,
-        error: "Only managers can update projects",
+        error: "Access denied",
       });
     }
 
-    const [project] = await db
+    const updateData = {
+      ...updates,
+      dueDate: updates.dueDate ? new Date(updates.dueDate) : updates.dueDate === null ? null : undefined,
+    };
+
+    const [updatedProject] = await db
       .update(projects)
-      .set({
-        ...data,
-        dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(eq(projects.id, projectId))
       .returning();
 
     res.json({
       success: true,
-      data: project,
+      data: updatedProject,
     });
   } catch (error) {
     next(error);
@@ -207,7 +210,6 @@ router.delete("/:id", authenticateToken, async (req: AuthenticatedRequest, res, 
   try {
     const projectId = req.params.id as string;
 
-    // Check if user is manager
     const membership = await db.query.projectMembers.findFirst({
       where: and(
         eq(projectMembers.projectId, projectId),
@@ -218,7 +220,7 @@ router.delete("/:id", authenticateToken, async (req: AuthenticatedRequest, res, 
     if (!membership || membership.role !== "manager") {
       return res.status(403).json({
         success: false,
-        error: "Only managers can delete projects",
+        error: "Access denied",
       });
     }
 
