@@ -4,6 +4,7 @@ import Logo from "@/components/Logo";
 import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
 import { useLogin } from "@/hooks/api/useAuth";
 import { toast } from "sonner";
+import { AxiosError } from "axios";
 
 const SignIn = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -13,7 +14,7 @@ const SignIn = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     login.mutate(formData, {
-      onError: (error: any) => {
+      onError: (error: AxiosError<{ error?: string }>) => {
         toast.error(error.response?.data?.error || "Login failed");
       },
     });
