@@ -1,21 +1,19 @@
 import { Router } from "express";
-import { z } from "zod";
 import { db } from "../db";
 import { notifications } from "../db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types";
 
 const router = Router();
 
-// Get user notifications
+// Get all notifications for current user
 router.get("/", authenticateToken, async (req: AuthenticatedRequest, res, next) => {
   try {
-    const userNotifications = await db
-      .select()
-      .from(notifications)
-      .where(eq(notifications.userId, req.user!.id))
-      .orderBy(desc(notifications.createdAt));
+    const userNotifications = await db.query.notifications.findMany({
+      where: eq(notifications.userId, req.user!.id),
+      orderBy: [notifications.createdAt],
+    });
 
     res.json({
       success: true,
@@ -26,30 +24,12 @@ router.get("/", authenticateToken, async (req: AuthenticatedRequest, res, next) 
   }
 });
 
-// Mark as read
+// Mark notification as read
 router.put("/:id/read", authenticateToken, async (req: AuthenticatedRequest, res, next) => {
   try {
     const notificationId = req.params.id as string;
 
-    const notification = await db.query.notifications.findFirst({
-      where: eq(notifications.id, notificationId),
-    });
-
-    if (!notification) {
-      return res.status(404).json({
-        success: false,
-        error: "Notification not found",
-      });
-    }
-
-    if (notification.userId !== req.user!.id) {
-      return res.status(403).json({
-        success: false,
-        error: "Access denied",
-      });
-    }
-
-    const [updated] = await db
+    const [notification] = await db
       .update(notifications)
       .set({ read: true })
       .where(eq(notifications.id, notificationId))
@@ -57,20 +37,20 @@ router.put("/:id/read", authenticateToken, async (req: AuthenticatedRequest, res
 
     res.json({
       success: true,
-      data: updated,
+      data: notification,
     });
   } catch (error) {
     next(error);
   }
 });
 
-// Mark all as read
+// Mark all notifications as read
 router.put("/read-all", authenticateToken, async (req: AuthenticatedRequest, res, next) => {
   try {
     await db
       .update(notifications)
       .set({ read: true })
-      .where(eq(notifications.userId, req.user!.id));
+      .where(and(eq(notifications.userId, req.user!.id), eq(notifications.read, false)));
 
     res.json({
       success: true,
@@ -108,7 +88,7 @@ router.delete("/:id", authenticateToken, async (req: AuthenticatedRequest, res, 
 
     res.json({
       success: true,
-      message: "Notification deleted",
+      message: "Notification deleted successfully",
     });
   } catch (error) {
     next(error);
