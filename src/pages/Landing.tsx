@@ -37,12 +37,16 @@ const Landing = () => {
         scrollTrigger: { trigger: featuresRef.current, start: "top 80%" },
         y: 60, opacity: 0, stagger: 0.1, duration: 0.8, ease: "power3.out"
       });
+      // Ensure features are visible if ScrollTrigger fails
+      gsap.set(".feature-card", { opacity: 1, delay: 0.5 });
 
       // Pricing
       gsap.from(".pricing-card", {
         scrollTrigger: { trigger: pricingRef.current, start: "top 80%" },
         y: 50, opacity: 0, stagger: 0.2, duration: 0.8, ease: "power3.out"
       });
+      // Ensure pricing cards are visible if ScrollTrigger fails
+      gsap.set(".pricing-card", { opacity: 1, delay: 0.5 });
     });
     return () => ctx.revert();
   }, []);
@@ -167,7 +171,7 @@ const Landing = () => {
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((f, i) => (
-              <div key={i} className="feature-card clay-card p-6 group cursor-pointer">
+              <div key={i} className="feature-card clay-card p-6 group cursor-pointer" style={{ opacity: 1 }}>
                 <div className="clay-card-inset w-14 h-14 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                   <f.icon className="w-7 h-7 text-primary" />
                 </div>
@@ -206,7 +210,7 @@ const Landing = () => {
                 cta: "Contact Sales", highlight: false
               },
             ].map((plan, i) => (
-              <div key={i} className={`pricing-card clay-card p-8 ${plan.highlight ? "ring-2 ring-primary scale-105 relative" : ""}`}>
+              <div key={i} className={`pricing-card clay-card p-8 ${plan.highlight ? "ring-2 ring-primary scale-105 relative" : ""}`} style={{ opacity: 1 }}>
                 {plan.highlight && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 clay-badge bg-primary text-primary-foreground px-4 py-1 text-xs">
                     POPULAR
