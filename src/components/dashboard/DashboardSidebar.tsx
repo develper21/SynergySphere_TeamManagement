@@ -3,15 +3,17 @@ import Logo from "@/components/Logo";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, FolderKanban, CheckSquare, Users, Settings,
-  Bell, FileText, User, CreditCard, Brain, LogOut, ChevronLeft, ChevronRight
+  Bell, FileText, User, CreditCard, Brain, LogOut, ChevronLeft, ChevronRight, MessageSquare
 } from "lucide-react";
 import { useState } from "react";
+import { useLogout } from "@/hooks/api/useAuth";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: FolderKanban, label: "Projects", path: "/dashboard/projects" },
   { icon: CheckSquare, label: "Tasks", path: "/dashboard/tasks" },
   { icon: Users, label: "Members", path: "/dashboard/members" },
+  { icon: MessageSquare, label: "Discussions", path: "/dashboard/discussion" },
   { icon: Bell, label: "Notifications", path: "/dashboard/notifications" },
   { icon: Brain, label: "AI Panel", path: "/dashboard/ai" },
   { icon: FileText, label: "Templates", path: "/dashboard/templates" },
@@ -23,6 +25,7 @@ const navItems = [
 const DashboardSidebar = () => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const logout = useLogout();
 
   return (
     <aside className={cn(
@@ -61,10 +64,13 @@ const DashboardSidebar = () => {
       </nav>
 
       <div className="p-3 border-t border-border/50">
-        <Link to="/" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-destructive hover:bg-destructive/10 transition-all">
+        <button
+          onClick={logout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-destructive hover:bg-destructive/10 transition-all text-left"
+        >
           <LogOut className="w-5 h-5 shrink-0" />
           {!collapsed && <span>Logout</span>}
-        </Link>
+        </button>
       </div>
     </aside>
   );
