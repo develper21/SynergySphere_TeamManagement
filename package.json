@@ -10,6 +10,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:frontend": "vitest run src/test",
+    "test:server": "vitest run src/server/test",
     "test:watch": "vitest",
     "server:dev": "tsx watch src/server/index.ts",
     "server:start": "NODE_ENV=production tsx src/server/index.ts",
