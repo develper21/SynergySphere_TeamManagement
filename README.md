@@ -448,6 +448,10 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
 ## 🔧 Development Workflow
 
+### Continuous Integration
+
+The GitHub Actions workflow in `.github/workflows/ci.yml` runs on pushes, pull requests, and manual dispatches. It installs the shared frontend and server dependencies with `npm ci`, then runs linting, the server and frontend test suites, and the frontend production build.
+
 ### 🛠️ TypeScript Path Aliases
 
 **📂 Configured Aliases:**
